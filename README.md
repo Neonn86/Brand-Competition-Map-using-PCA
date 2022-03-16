@@ -36,7 +36,7 @@ The iso-preference line indicates that all the brands on this line shares the sa
 
 The ideal vector indicates the improvement direction that companies can adopt to improve their customer recognition.
 
-(4) Use Bootstrap to gain the 95% confidence interval of ideal vector's angles.
+(4) Use the data Bootstrap to gain the 95% confidence interval of ideal vector's angle.
 
 ## Conclusions:
 (1) In the Good Engineer & Economic level, the car brands can be categrized into 4 groups. The brands in the same group indicate the similar ratings from customers perspective.
