@@ -1,0 +1,145 @@
+---
+title: "Brand Competition Map using PCA"
+author: "Neon(Youfang) Zhang"
+date: "3/16/2022"
+output: html_document
+---
+
+```{r}
+library(glmnet)
+library(readxl)
+
+# Importing the data and assigning x and y
+cars_data <-  read_excel("Cars_Data.xlsx", sheet = "Infinity Data")  
+head(cars_data)
+```
+
+Prepare for the PCA
+
+```{r}
+y <-  cars_data[,17]
+x <-  as.matrix(cars_data[,2:16])
+
+# Creating the correlation matrix
+cor_mat = cor(x)
+```
+
+# Principal Components Analysis
+
+```{r}
+out1 <-  eigen(cor_mat)	# eigen decomposition of correlation matrix
+va <-  out1$values			# eigenvalues
+ve <-  out1$vectors		# eigenvector
+
+# Scree Plot
+plot(va, ylab = "Eigenvalues", xlab = "Component Nos")
+```
+
+Retain the factors whose eigenvalue \> 1. In this way, we remain 4 factors to build our model.
+
+The components of these 4 factors are shown as follows:
+
+```{r}
+ego <- va[va > 1]							# eigenvalues > 1
+nn <- nrow(as.matrix(ego))		# number of factors to retain
+print(nn)
+
+out2 <- ve[,1:nn]							# eigenvectors associated with the retained factors
+out3 <- ifelse(abs(out2) < 0.3, 0, out2)		# ignore small values < 0.3
+
+rownames(out3) <- c("Attractive",	"Quiet",	"Unreliable",	"Poorly Built",	"Interesting",	"Sporty",	"Uncomfortable",	"Roomy",	"Easy Service",	"Prestige",	"Common",	"Economical",	"Successful",	"AvantGarde",	"Poor Value")
+
+out3
+```
+
+Now we can use these 4 factors to run our model.
+
+```{r}
+z_test <- x %*% out3
+out_test <- lm(as.matrix(y) ~ z_test)
+summary(out_test)
+```
+
+Because Z1 and Z2 are negative, to make sure the slope of the later ideal vector arrow is positive, we change the signs of those two vectors.
+
+```{r}
+out4 <- out3
+out4[,1] <- -1*out3[,1]
+out4[,2] <- -1*out3[,2]
+
+out4
+```
+
+Re-run the model again using modified factors.
+
+```{r}
+z = x %*% out4			# Component Scores; coordinates of the brands in the map
+out5 = lm(as.matrix(y) ~ z)		# Preference Regression to estimate how benefits drive overall preferences = f(benefits)
+summary(out5)
+```
+
+# Brand Map in Z1 & Z3 space
+
+Seeing from the components of Z1 & Z3, we can name the Z1 as 'Popular & Good Engineering', Z3 as 'Basic & Affordable'.
+
+```{r}
+# Coordinates of brands in (Z1, Z3) space
+Z1 = z[,1]
+Z3 = z[,3]
+z.out = cbind(Z1, Z3)
+rownames(z.out) = c("Infinity","Ford","Audi","Toyota","Eagle","Honda","Saab","Pontiac","BMW","Mercury")
+
+# Plot the brand map
+plot(Z1, Z3, main = "Brands in Z1 and Z3 space", xlab = "Benefit Z1: Popular & Good Engineering", ylab = "Benefit Z3: Basic & Affordable", col = "red", pch = 19, cex = 2)
+text(z.out, labels = row.names(z.out), font = 2, cex = 0.5, pos = c(1,4))
+```
+
+Slopes and angles of iso-preference and ideal vector
+
+The iso preference's slope is -1.49, the car brand on the one line has the same preference score of customers.
+
+And the direction of ideal vector is way car company to make improvement on customer popularity.
+
+```{r}
+# Slopes of iso-preference and ideal vector	
+b1 = as.vector(coef(out5)[2])
+b2 = as.vector(coef(out5)[4])
+slope.iso.preference = - b1/b2
+slope.iso.preference
+slope.ideal.vector = b2/b1
+slope.ideal.vector
+
+# Angles of iso-preference and ideal vector	
+angle.iso.preference = atan(slope.iso.preference)*180/pi	
+angle.ideal.vector = atan(slope.ideal.vector)*180/pi
+```
+
+# Bootstrap
+
+To get the 95% confidence interval for the angle of the ideal vector, we use bootstrap to extract data with replacement.
+
+```{r}
+set.seed(50)
+
+colnames(z) <- c("Z1", "Z2", "Z3", "Z4")
+data <- cbind(y, z)
+bb <- 1000
+nn <- nrow(data)
+
+angle_ideal_vector_star <- rep(0,bb)
+
+for (i in 1:bb) {
+  data_star <- data[sample(nn, nn, replace=T),]
+  y_star <- data_star[,1]
+  z_star <- data_star[,2:ncol(data_star)]
+  model <- lm(as.matrix(y_star) ~ as.matrix(z_star))
+  model_coef <- coef(model)
+  slope_ideal_vector_star <- model_coef[4]/model_coef[2]
+  angle_ideal_vector_star[i] <- atan(slope_ideal_vector_star)*180/pi
+}
+
+conf_int <- quantile(angle_ideal_vector_star, c(0.025, 0.975), na.rm = TRUE)
+round(conf_int,2)
+```
+
+The result of the 95% confidence interval for the angle of the ideal vector is (-4.65, 61.07), which means most of the measures to improve customer popularity will result in the improvement direction falling into this range.
